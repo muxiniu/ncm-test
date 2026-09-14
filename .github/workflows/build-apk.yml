@@ -29,12 +29,12 @@ jobs:
           mv gradle-8.4 gradle-home
           echo "$PWD/gradle-home/bin" >> $GITHUB_PATH
 
-      - name: Init Gradle Wrapper (Ignore plugin errors)
+      - name: Init Gradle Wrapper
         run: |
           gradle wrapper --gradle-version 8.4 || true
           if [ -f "./gradlew" ]; then chmod +x ./gradlew; fi
 
-      - name: Build APK (Direct Gradle)
+      - name: Build APK
         run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
