@@ -1,4 +1,4 @@
-package com.ncm.decoder;
+package com.muxiniu.ncmtest;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
