@@ -1,4 +1,4 @@
-package com.ncm.decoder;
+package com.muxiniu.ncmtest;
 
 import java.io.*;
 import javax.crypto.Cipher;
