@@ -1,18 +1,39 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
+plugins {
+    id 'com.android.application' version '8.3.0' apply true
+}
+
+android {
+    namespace 'com.muxiniu.ncmtest'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.muxiniu.ncmtest"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            // 调试版使用默认签名，避免 CI 缺少签名文件报错
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+dependencies {
+    implementation 'androidx.core:core-java:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    // 如有其他依赖可保留在下方，其余基础依赖可按需删减
 }
-
-task clean(type: Delete) {
-    delete rootProject.buildDir
-}
-
