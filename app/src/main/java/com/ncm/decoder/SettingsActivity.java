@@ -1,6 +1,5 @@
 package com.muxiniu.ncmtest;
 
-
 import android.os.Bundle;
 import android.widget.CheckBox;
 import androidx.appcompat.app.AppCompatActivity;
