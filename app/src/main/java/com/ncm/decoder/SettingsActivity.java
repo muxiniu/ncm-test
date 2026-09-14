@@ -1,4 +1,5 @@
-package com.ncm.decoder;
+package com.muxiniu.ncmtest;
+
 
 import android.os.Bundle;
 import android.widget.CheckBox;
