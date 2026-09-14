@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical">
+    <androidx.appcompat.widget.Toolbar android:id="@+id/toolbar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary" android:title="设置" android:titleTextColor="#fff"/>
+    <CheckBox android:id="@+id/cb_write_cover" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="写入专辑封面"
+        android:checked="true" android:padding="16dp"/>
+    <CheckBox android:id="@+id/cb_dedup" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="启用去重检测"
+        android:checked="true" android:padding="16dp"/>
+</LinearLayout>
