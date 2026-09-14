@@ -1,4 +1,4 @@
-package com.ncm.decoder;
+package com.muxiniu.ncmtest;
 
 import android.content.Context;
 import android.os.Process;
