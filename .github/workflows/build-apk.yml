@@ -26,16 +26,16 @@ jobs:
         run: |
           curl -L https://services.gradle.org/distributions/gradle-8.4-bin.zip -o gradle.zip
           unzip -q gradle.zip
-          echo "GRADLE_HOME=$PWD/gradle-8.4" >> $GITHUB_ENV
-          echo "$PWD/gradle-8.4/bin" >> $GITHUB_PATH
+          mv gradle-8.4 gradle-home
+          echo "$PWD/gradle-home/bin" >> $GITHUB_PATH
 
-      - name: Init Gradle Wrapper
+      - name: Init Gradle Wrapper (Ignore plugin errors)
         run: |
           gradle wrapper --gradle-version 8.4 || true
-          chmod +x ./gradlew
+          if [ -f "./gradlew" ]; then chmod +x ./gradlew; fi
 
-      - name: Build APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build APK (Direct Gradle)
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
