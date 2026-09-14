@@ -17,7 +17,6 @@ android {
     buildTypes {
         debug {
             minifyEnabled false
-            // 调试版使用默认签名，避免 CI 缺少签名文件报错
         }
         release {
             minifyEnabled false
@@ -32,8 +31,9 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core-java:1.12.0'
+    // 修正：将 core-java 改为 core，并移除易冲突的 material
+    implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    // 如有其他依赖可保留在下方，其余基础依赖可按需删减
+    // 如果后续需要 Material Design，可再添加，目前为保 CI 通过先注释
+    // implementation 'com.google.android.material:material:1.11.0'
 }
