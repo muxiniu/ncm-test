@@ -42,12 +42,13 @@ jobs:
           echo "PATH=$PATH" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
 
-      - name: Clean & Create Minimal Project (100% Self-Contained)
+      - name: Clean & Create Minimal Project (Final Fix)
         run: |
+          # 彻底清理
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/muxiniu/ncmtest
           
-          # 1. AndroidManifest.xml
+          # 1. AndroidManifest.xml (标准默认路径)
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -75,7 +76,7 @@ jobs:
           }
           EOF
           
-          # 3. settings.gradle (核心：声明插件仓库，优先 google())
+          # 3. settings.gradle (插件仓库)
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -94,7 +95,7 @@ jobs:
           include ':app'
           EOF
           
-          # 4. app/build.gradle (显式版本 + buildscript 仓库兜底)
+          # 4. app/build.gradle (移除 sourceSets，使用默认路径)
           cat > app/build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -120,9 +121,6 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              sourceSets {
-                  main { manifest.srcFile 'src/main/AndroidManifest.xml' }
-              }
           }
           dependencies {
               implementation 'androidx.core:core:1.12.0'
@@ -132,15 +130,20 @@ jobs:
           # 5. local.properties
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          # 初始化 wrapper (可选，主要用 gradle 命令)
-          gradle wrapper --gradle-version 8.4 || true
-          echo "--- Project Tree ---"
-          ls -la
-          find app -type f
+          # 验证路径
+          echo "--- Verifying Paths ---"
+          ls -R app/src/main/
+          cat app/src/main/AndroidManifest.xml
 
       - name: Build APK
         run: |
           unset ANDROID_SDK_ROOT
-          # 直接用 gradle，避免 ./gradlew 路径问题
           gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --refresh-dependencies
-          echo "--- 
+          echo "--- APK Output ---"
+          ls -la app/build/outputs/apk/debug/ || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NCM-Decoder-Pro
+          path: app/buil
