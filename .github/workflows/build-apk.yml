@@ -42,13 +42,13 @@ jobs:
           echo "PATH=$PATH" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
 
-      - name: Clean & Create Minimal Project (Final Fix)
+      - name: Clean & Create Minimal Project (Ultimate Fix)
         run: |
-          # 彻底清理
+          # 彻底清理（含 gradle 缓存，防路径记忆）
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/muxiniu/ncmtest
           
-          # 1. AndroidManifest.xml (标准默认路径)
+          # 1. AndroidManifest.xml (绝对路径写入)
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -76,7 +76,7 @@ jobs:
           }
           EOF
           
-          # 3. settings.gradle (插件仓库)
+          # 3. settings.gradle
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -95,7 +95,7 @@ jobs:
           include ':app'
           EOF
           
-          # 4. app/build.gradle (移除 sourceSets，使用默认路径)
+          # 4. app/build.gradle (显式锁定 manifest 路径)
           cat > app/build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -121,6 +121,11 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
+              sourceSets {
+                  main {
+                      manifest.srcFile 'app/src/main/AndroidManifest.xml'
+                  }
+              }
           }
           dependencies {
               implementation 'androidx.core:core:1.12.0'
@@ -130,20 +135,14 @@ jobs:
           # 5. local.properties
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          # 验证路径
-          echo "--- Verifying Paths ---"
-          ls -R app/src/main/
-          cat app/src/main/AndroidManifest.xml
+          echo "--- Verifying File Existence ---"
+          pwd
+          find app -type f
+          ls -l app/src/main/AndroidManifest.xml
 
       - name: Build APK
         run: |
           unset ANDROID_SDK_ROOT
+          rm -rf .gradle
           gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --refresh-dependencies
-          echo "--- APK Output ---"
-          ls -la app/build/outputs/apk/debug/ || true
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NCM-Decoder-Pro
-          path: app/buil
+          echo "--- APK 
