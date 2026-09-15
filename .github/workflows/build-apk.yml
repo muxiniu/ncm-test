@@ -28,39 +28,37 @@ jobs:
 
       - name: Manual Setup Android SDK
         run: |
-          # 清除 GitHub 自带的旧 SDK 环境变量，防止冲突
+          # 清除旧环境变量
           unset ANDROID_SDK_ROOT
+          export ANDROID_HOME=$HOME/android-sdk
           
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME/cmdline-tools
           curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmd.zip
           unzip -q cmd.zip
           mv cmdline-tools latest
           
-          # 仅设置 ANDROID_HOME (统一路径)
-          export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-          
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           
-          # 持久化到 GITHUB_ENV (供后续步骤使用)
+          # 持久化环境变量（只留 ANDROID_HOME）
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH" >> $GITHUB_ENV
-          # 确保不导出废弃变量
           echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
 
-      - name: Init Gradle Wrapper
+      - name: Init Gradle Wrapper & local.properties
         run: |
           gradle wrapper --gradle-version 8.4 || true
           if [ -f "./gradlew" ]; then chmod +x ./gradlew; fi
+          # 核心：直接写入 local.properties，让 Gradle 100% 找到 SDK
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          cat local.properties
 
       - name: Build APK
-        env:
-          ANDROID_HOME: /home/runner/work/_tool/android-sdk
         run: |
-          # 再次兜底清理，确保 Gradle 只看到唯一路径
           unset ANDROID_SDK_ROOT
+          # 显式传入 ANDROID_HOME 和 sdk.dir，双重保险
           gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME
 
       - name: Upload APK
