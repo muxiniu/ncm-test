@@ -7,41 +7,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup Android SDK
-        run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
-          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline.zip
-          unzip -q cmdline.zip
-          mv cmdline-tools latest
-          rm cmdline.zip
-          
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+        uses: android-actions/setup-android@v3
 
-      - name: Create Minimal Project (Final Fix)
+      - name: Create Minimal Project (With Real Function Skeleton)
         run: |
-          rm -rf app build .gradle src local.properties gradle gradlew gradlew.bat
+          set -e
+          rm -rf ./*
           mkdir -p app/src/main/java/com/muxiniu/ncmtest
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          
-          # 1. Manifest (绝对路径防丢失)
+          mkdir -p app/src/main/res/layout
+
+          # 1. Manifest (强制生成，防 AGP 8.3 路径丢失)
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
               <application android:label="NCM Decoder" android:theme="@android:style/Theme.DeviceDefault">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -52,90 +41,73 @@ jobs:
               </application>
           </manifest>
           EOF
-          
-          # 2. Java
+
+          # 2. 布局 (真实 UI 占位)
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:orientation="vertical" android:padding="16dp">
+              <Button android:id="@+id/btnPick" android:layout_width="match_parent" android:layout_height="wrap_content"
+                  android:text="选择 NCM 文件" />
+              <TextView android:id="@+id/tvStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+                  android:layout_marginTop="16dp" android:text="就绪" />
+          </LinearLayout>
+          EOF
+
+          # 3. 字符串
+          echo '<resources><string name="app_name">NCM Decoder</string></resources>' > app/src/main/res/values/strings.xml
+
+          # 4. 真实功能骨架 (MainActivity)
           cat > app/src/main/java/com/muxiniu/ncmtest/MainActivity.java << 'EOF'
           package com.muxiniu.ncmtest;
           import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
           import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.TextView;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import android.Manifest;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+
           public class MainActivity extends Activity {
+              private TextView tvStatus;
+              private static final int REQ_CODE = 100;
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  tvStatus = findViewById(R.id.tvStatus);
+                  Button btn = findViewById(R.id.btnPick);
+                  btn.setOnClickListener(v -> {
+                      if (Build.VERSION.SDK_INT <= 29 && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+                      } else {
+                          Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                          i.setType("*/*");
+                          startActivityForResult(i, REQ_CODE);
+                      }
+                  });
               }
-          }
-          EOF
-          
-          # 3. 空资源 (防止资源合并报错)
-          echo '<resources></resources>' > app/src/main/res/values/strings.xml
-          
-          # 4. Settings (锁定仓库)
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  gradlePluginPortal()
-                  mavenCentral()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          include ':app'
-          EOF
-          
-          # 5. Build (【关键】固定 AGP 8.1.4 + 强制 sourceSets)
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application' version '8.1.4'
-          }
-          android {
-              namespace 'com.muxiniu.ncmtest'
-              compileSdk 34
-              
-              sourceSets {
-                  main {
-                      manifest.srcFile 'src/main/AndroidManifest.xml'
-                      java.srcDirs = ['src/main/java']
-                      res.srcDirs = ['src/main/res']
+              @Override
+              protected void onActivityResult(int rc, int res, Intent d) {
+                  super.onActivityResult(rc, res, d);
+                  if (rc == REQ_CODE && res == RESULT_OK && d != null) {
+                      tvStatus.setText("开始解码...");
+                      // 真实解码调度 (此处仅占位，核心算法需填入 NCMDecoder)
+                      new Thread(() -> {
+                          // new DecodeTask(this, d.getData(), s -> runOnUiThread(() -> tvStatus.setText(s))).execute();
+                          runOnUiThread(() -> tvStatus.setText("解码骨架已加载 (请填入真实 NCM 算法)"));
+                      }).start();
                   }
               }
-              
-              defaultConfig {
-                  minSdk 21
-                  targetSdk 34
-                  applicationId "com.muxiniu.ncmtest"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          dependencies {
-              implementation 'androidx.core:core:1.12.0'
           }
           EOF
-          
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          
-          echo "--- Hard File Verification ---"
-          find . -type f | sort
-          ls -l app/src/main/AndroidManifest.xml
 
-      - name: Build APK (Gradle 8.0 + AGP 8.1.4)
-        run: |
-          unset ANDROID_SDK_ROOT
-          rm -rf .gradle build app/build gradle gradlew*
-          
-          # AGP 8.1.4 官方推荐 Gradle 8.0
-          gradle wrapper --gradle-version 8.0
-          chmod +x gradlew
-          
-          ./gradlew assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --warning-mode all
-          
-          echo "--- APK Output Check ---"
-          ls -la app/build/outputs/apk/debug/ || 
+          # 5. Gradle 配置 (AGP 8.3.0 + Gradle 8.4 官方推荐)
+          cat > settings.gradle << 'EOF'
+          pluginManage
