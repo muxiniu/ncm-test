@@ -19,17 +19,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools platform;android-34 build-tools;34.0.0'
-
       - name: Download Gradle 8.4
         run: |
           curl -L https://services.gradle.org/distributions/gradle-8.4-bin.zip -o gradle.zip
           unzip -q gradle.zip
           mv gradle-8.4 gradle-home
           echo "$PWD/gradle-home/bin" >> $GITHUB_PATH
+
+      - name: Manual Setup Android SDK
+        run: |
+          # 下载 cmdline-tools (使用稳定版 12.0)
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
+          curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmd.zip
+          unzip -q cmd.zip
+          mv cmdline-tools latest
+          
+          # 设置环境变量
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          
+          # 接受协议并安装核心包 (android-34, build-tools 34.0.0)
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Init Gradle Wrapper
         run: |
