@@ -15,29 +15,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 纯手动配置 Android SDK，彻底绕开 setup-android@v3 的预装冲突
       - name: Manual Setup Android SDK (Stable)
         run: |
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           mkdir -p $HOME/android-sdk/cmdline-tools
-          
-          # 使用稳定的 cmdline-tools 版本 (11076708 = 12.0)，避免最新版网络波动
           curl -sLO https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip -d $HOME/android-sdk/cmdline-tools
           mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-          
-          # 接受协议并安装必要组件 (API 34, Build-Tools 34.0.0)
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
 
-      - name: Clean & Create Minimal Project (Strict Default Paths)
+      - name: Create Minimal Project (Pre-Gradle)
         run: |
           rm -rf app build .gradle src local.properties
           mkdir -p app/src/main/java/com/muxiniu/ncmtest
           
+          # 1. Manifest
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -52,6 +46,7 @@ jobs:
           </manifest>
           EOF
           
+          # 2. Java
           cat > app/src/main/java/com/muxiniu/ncmtest/MainActivity.java << 'EOF'
           package com.muxiniu.ncmtest;
           import android.app.Activity;
@@ -64,6 +59,7 @@ jobs:
           }
           EOF
           
+          # 3. Settings (强制 GRADLE 8.5)
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -82,9 +78,10 @@ jobs:
           include ':app'
           EOF
           
+          # 4. Build (锁定 AGP 8.5.0，解决输入文件校验报错)
           cat > app/build.gradle << 'EOF'
           plugins {
-              id 'com.android.application'
+              id 'com.android.application' version '8.5.0'
           }
           android {
               namespace 'com.muxiniu.ncmtest'
@@ -105,12 +102,15 @@ jobs:
           EOF
           
           echo "sdk.dir=$ANDROID_HOME" > local.properties
+          
+          echo "--- Strict File Verification (MUST exist before Gradle) ---"
+          ls -R app
 
       - name: Build APK
         run: |
           unset ANDROID_SDK_ROOT
           rm -rf .gradle build app/build
-          # 强制使用 Gradle 8.5 解决与 AGP 的兼容问题
+          # 直接用 Gradle 8.5，不再混用 wrapper
           gradle wrapper --gradle-version 8.5
           ./gradlew assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --warning-mode all
           
