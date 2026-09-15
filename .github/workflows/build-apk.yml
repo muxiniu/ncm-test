@@ -25,7 +25,6 @@ jobs:
           unzip -q gradle.zip
           mv gradle-8.4 gradle-home
           echo "$PWD/gradle-home/bin" >> $GITHUB_PATH
-          echo "GRADLE_HOME=$PWD/gradle-home" >> $GITHUB_ENV
 
       - name: Manual Setup Android SDK
         run: |
@@ -48,6 +47,7 @@ jobs:
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/muxiniu/ncmtest
           
+          # 1. AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -62,6 +62,7 @@ jobs:
           </manifest>
           EOF
           
+          # 2. MainActivity.java
           cat > app/src/main/java/com/muxiniu/ncmtest/MainActivity.java << 'EOF'
           package com.muxiniu.ncmtest;
           import android.app.Activity;
@@ -74,22 +75,64 @@ jobs:
           }
           EOF
           
+          # 3. settings.gradle (核心：声明插件仓库，优先 google())
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  gradlePluginPortal()
+                  mavenCentral()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
+          EOF
+          
+          # 4. app/build.gradle (显式版本 + buildscript 仓库兜底)
           cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.0'
+              }
+          }
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace 'com.muxiniu.ncmtest'
               compileSdk 34
-              defaultConfig { minSdk 21; targetSdk 34; applicationId "com.muxiniu.ncmtest" }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-              sourceSets { main { manifest.srcFile 'src/main/AndroidManifest.xml' } }
+              defaultConfig {
+                  minSdk 21
+                  targetSdk 34
+                  applicationId "com.muxiniu.ncmtest"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              sourceSets {
+                  main { manifest.srcFile 'src/main/AndroidManifest.xml' }
+              }
           }
-          dependencies { implementation 'androidx.core:core:1.12.0' }
+          dependencies {
+              implementation 'androidx.core:core:1.12.0'
+          }
           EOF
           
-          echo "include ':app'" > settings.gradle
+          # 5. local.properties
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          # 仅生成 wrapper 文件备用，不依赖它执行
+          # 初始化 wrapper (可选，主要用 gradle 命令)
           gradle wrapper --gradle-version 8.4 || true
           echo "--- Project Tree ---"
           ls -la
@@ -98,13 +141,6 @@ jobs:
       - name: Build APK
         run: |
           unset ANDROID_SDK_ROOT
-          # 直接用已安装的 gradle 命令，替代 ./gradlew，避免 127 错误
-          gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME
-          echo "--- APK Output ---"
-          ls -la app/build/outputs/apk/debug/ || true
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NCM-Decoder-Pro
-          path: app/build/outputs/apk/debug/*.apk
+          # 直接用 gradle，避免 ./gradlew 路径问题
+          gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --refresh-dependencies
+          echo "--- 
