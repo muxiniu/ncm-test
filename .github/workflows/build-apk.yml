@@ -1,20 +1,137 @@
+name: Build NCM Decoder Pro APK
+
+on:
+  workflow_dispatch: # 保留手动触发，确保显示 "Run workflow" 按钮
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Manual Setup Android SDK
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME/cmdline-tools
+          curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline.zip
+          unzip -q cmdline.zip
+          mv cmdline-tools latest
+          rm cmdline.zip
+          
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+          # 清空可能干扰的变量
+          echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
+
+      - name: Clean & Create Minimal Project (Strict Default Paths)
+        run: |
+          # 彻底清理，防止历史缓存和根目录残留
+          rm -rf app build .gradle src local.properties
+          mkdir -p app/src/main/java/com/muxiniu/ncmtest
+          
+          # 1. AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="NCM Decoder" android:theme="@android:style/Theme.DeviceDefault">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          
+          # 2. MainActivity.java
+          cat > app/src/main/java/com/muxiniu/ncmtest/MainActivity.java << 'EOF'
+          package com.muxiniu.ncmtest;
+          import android.app.Activity;
+          import android.os.Bundle;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
+          
+          # 3. settings.gradle
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  gradlePluginPortal()
+                  mavenCentral()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
+          EOF
+          
+          # 4. app/build.gradle (完全依赖 AGP 默认寻址，无 sourceSets)
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.muxiniu.ncmtest'
+              compileSdk 34
+              defaultConfig {
+                  minSdk 21
+                  targetSdk 34
+                  applicationId "com.muxiniu.ncmtest"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core:1.12.0'
+          }
+          EOF
+          
+          # 5. local.properties
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          
+          echo "--- Strict Path Verification ---"
+          pwd
+          ls -R app
+
       - name: Build APK
         run: |
           unset ANDROID_SDK_ROOT
           rm -rf .gradle build app/build
           echo "--- Starting Build ---"
-          # 去掉 || true，构建失败必须暴露
+          # 不使用 || true，构建失败必须直接暴露
           gradle assembleDebug --no-daemon -Dandroid.sdk.path=$ANDROID_HOME --refresh-dependencies
           
-          echo "--- Forced File Check ---"
-          ls -R app/src/main/ || true
-          ls -la app/build/outputs/apk/debug/ || echo "APK目录不存在！构建可能失败了"
+          echo "--- APK Output Check ---"
+          ls -la app/build/outputs/apk/debug/ || echo "构建失败：APK目录不存在"
 
       - name: Upload APK
-        # 只有成功才上传，且找不到文件时直接报错（不再假成功）
-        if: success()
+        if: success() # 只有构建成功才上传
         uses: actions/upload-artifact@v4
         with:
           name: NCM-Decoder-Pro
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error # 关键：找不到APK就让步骤变红失败
+          if-no-files-found: error # 找不到文件则标红失败，杜绝假成功
